@@ -42,11 +42,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from relaxgen import CKPT_DIR  # noqa: E402
+
 EQV3_RUNS = Path("/sfs/weka/scratch/gqs7zr/ai4mat/results/bi2te3_2vte_pilot/05_eqv3_tight_relaxations")
-MACE_FT = Path(
-    "/scratch/gqs7zr/ai4mat/mace_finetune/bi2te3_omat_medium_seed42_resume_epoch17/"
-    "checkpoints/bi2te3_mace_omat_medium_seed42_resume_epoch17_run-42.model"
-)
+MACE_FT = CKPT_DIR / "mace_ft" / "bi2te3_mace_omat_medium_seed42_resume_epoch17_run-42.model"
 MACE_OMAT = Path("/scratch/gqs7zr/ai4mat/mace_finetune/mace-omat-0-medium.model")
 MODELS = ("eqv3", "mace_ft", "uma", "mace_omat")
 FINE_TUNED = ("eqv3", "mace_ft")

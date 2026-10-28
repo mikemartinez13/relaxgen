@@ -26,7 +26,6 @@ COHORT=$(realpath "$1")
 cd "${PROJECT_ROOT}"
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
-export EQUIFORMER_V3_ROOT="${EQUIFORMER_V3_ROOT:-/home/gqs7zr/ai4mat/ConstrDiff_Material/models/equiformer_v3}"
 export XDG_CACHE_HOME="${TMPDIR:-/tmp}/gqs7zr-xdg-cache"
 export MPLCONFIGDIR="${TMPDIR:-/tmp}/gqs7zr-matplotlib"
 mkdir -p "${XDG_CACHE_HOME}" "${MPLCONFIGDIR}"

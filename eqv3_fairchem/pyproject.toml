@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-core"
+version = "0.1.0+eqv3bi2te3"
+description = "fairchem v1 fork with the EquiformerV3 model, trimmed to what relaxgen needs to load the fine-tuned EqV3 checkpoint"
+license = {text = "MIT License"}
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "torch",
+    "numpy",
+    "lmdb",
+    "ase",
+    "pymatgen>=2023.10.3",
+    "pyyaml",
+    "tensorboard",
+    "wandb",
+    "numba",
+    "e3nn>=0.5",
+    "requests",
+    "orjson",
+    "tqdm",
+    "submitit",
+    "hydra-core",
+    "torchtnt",
+    "torch_geometric",
+    "huggingface_hub>=0.27.1",
+    "pydantic>=2.10.0"
+]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]

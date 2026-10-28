@@ -29,6 +29,6 @@ export XDG_CACHE_HOME="${TMPDIR:-/tmp}/gqs7zr-xdg-cache"
 export MPLCONFIGDIR="${TMPDIR:-/tmp}/gqs7zr-matplotlib"
 mkdir -p "${XDG_CACHE_HOME}" "${MPLCONFIGDIR}"
 
-PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" EQUIFORMER_V3_ROOT="${EQUIFORMER_V3_ROOT:-/home/gqs7zr/ai4mat/ConstrDiff_Material/models/equiformer_v3}" \
+PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
   "${EQV3_PYTHON}" -u -m experiments.umlip_dft_diversity prerelax --output-dir "${OUTPUT_DIR}" --model eqv3
 env -u PYTHONPATH "${UMA_PYTHON}" -u -m experiments.umlip_dft_diversity prerelax --output-dir "${OUTPUT_DIR}" --model uma

@@ -35,6 +35,6 @@ echo "[INFO] ${MODEL} shard ${SHARD}/${NUM_SHARDS} on $(nvidia-smi --query-gpu=n
 if [[ "${MODEL}" == "uma" ]]; then
   env -u PYTHONPATH /home/gqs7zr/.conda/envs/fairchemv2/bin/python -u "${args[@]}"
 else
-  PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" EQUIFORMER_V3_ROOT="${EQUIFORMER_V3_ROOT:-/home/gqs7zr/ai4mat/ConstrDiff_Material/models/equiformer_v3}" \
+  PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
     /home/gqs7zr/.conda/envs/fairchemv1/bin/python -u "${args[@]}"
 fi

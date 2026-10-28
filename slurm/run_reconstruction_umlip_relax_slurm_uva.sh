@@ -21,8 +21,9 @@ PROJECT_ROOT=${PROJECT_ROOT:-/home/gqs7zr/ai4mat/relaxgen}
 PYTHON_BIN=${PYTHON_BIN:-/home/gqs7zr/.conda/envs/fairchemv1/bin/python}
 INPUT_DIR=${1:?"Usage: sbatch $0 INPUT_DIR OUTPUT_DIR [CHECKPOINT] [CONFIG_YML]"}
 OUTPUT_DIR=${2:?"Usage: sbatch $0 INPUT_DIR OUTPUT_DIR [CHECKPOINT] [CONFIG_YML]"}
-CHECKPOINT=${3:-/scratch/gqs7zr/equiformer_v3/bo_finetune_bi2te3_clean_test_data/runs/best_model/best_by_forces_mae.pt}
-CONFIG_YML=${4:-/scratch/gqs7zr/equiformer_v3/bo_finetune_bi2te3_clean_test_data/runs/best_model/config.yml}
+CKPT_DIR=${RELAXGEN_CKPT_DIR:-${PROJECT_ROOT}/ft_ckpts}
+CHECKPOINT=${3:-${CKPT_DIR}/eqv3/best_by_forces_mae.pt}
+CONFIG_YML=${4:-${CKPT_DIR}/eqv3/config.yml}
 
 [[ -d "${INPUT_DIR}" ]] || { echo "Candidate directory not found: ${INPUT_DIR}" >&2; exit 2; }
 [[ -f "${CHECKPOINT}" ]] || { echo "EqV3 checkpoint not found: ${CHECKPOINT}" >&2; exit 2; }
@@ -32,7 +33,6 @@ mkdir -p "${OUTPUT_DIR}" /scratch/gqs7zr/ai4mat/runs
 cd "${PROJECT_ROOT}"
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
-export EQUIFORMER_V3_ROOT="${EQUIFORMER_V3_ROOT:-/home/gqs7zr/ai4mat/ConstrDiff_Material/models/equiformer_v3}"
 export XDG_CACHE_HOME="${TMPDIR:-/tmp}/gqs7zr-xdg-cache"
 export MPLCONFIGDIR="${TMPDIR:-/tmp}/gqs7zr-matplotlib"
 mkdir -p "${XDG_CACHE_HOME}" "${MPLCONFIGDIR}"

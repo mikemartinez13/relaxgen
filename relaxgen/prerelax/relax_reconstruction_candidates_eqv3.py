@@ -17,16 +17,14 @@ from ase import Atoms
 from ase.optimize.fire import FIRE
 from ase.optimize.fire2 import FIRE2
 
+from relaxgen import CKPT_DIR
 from relaxgen.structures.bi2te3_defect_generation import (
     file_sha256,
     geometry_sha256,
     read_single_structure,
     write_extxyz_float64,
 )
-DEFAULT_CHECKPOINT = Path(
-    "/scratch/gqs7zr/equiformer_v3/bo_finetune_bi2te3_clean_test_data/"
-    "runs/best_model/best_by_forces_mae.pt"
-)
+DEFAULT_CHECKPOINT = CKPT_DIR / "eqv3" / "best_by_forces_mae.pt"
 DEFAULT_CONFIG = DEFAULT_CHECKPOINT.with_name("config.yml")
 
 

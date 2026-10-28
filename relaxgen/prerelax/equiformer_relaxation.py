@@ -22,37 +22,6 @@ from ase.io import write as ase_write
 from ase.optimize import BFGS, FIRE, LBFGS
 
 
-MODULE_ROOT = Path(__file__).resolve().parent
-# The EquiformerV3 code still lives in the ConstrDiff_Material checkout.
-CONSTR_DIFF_ROOT = Path(
-    os.environ.get("CONSTR_DIFF_ROOT", "/home/gqs7zr/ai4mat/ConstrDiff_Material")
-)
-PROJECT_ROOT = CONSTR_DIFF_ROOT
-VENDORED_FAIRCHEM_V1_ROOT = CONSTR_DIFF_ROOT / "fairchemv1"
-
-
-def _candidate_equiformer_roots() -> list[Path]:
-    env_candidates = [
-        os.environ.get("EQUIFORMER_V3_ROOT"),
-        os.environ.get("EQV3_ROOT"),
-    ]
-    candidates: list[Path] = []
-
-    for value in env_candidates:
-        if value:
-            candidates.append(Path(value).expanduser().resolve())
-
-    candidates.extend(
-        [
-            PROJECT_ROOT / "models" / "equiformer_v3",
-            PROJECT_ROOT.parent / "equiformer_v3",
-            Path.cwd() / "equiformer_v3",
-            Path.cwd().parent / "equiformer_v3",
-        ]
-    )
-    return candidates
-
-
 from fairchem.core import OCPCalculator
 
 
