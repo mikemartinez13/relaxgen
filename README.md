@@ -35,13 +35,24 @@ python -m relaxgen.dispatch.qe_dispatch tick --dispatch-dir DISPATCH_DIR
 sbatch --array=0 slurm/run_dft_relax_cpu_slurm_uva.sh RELAX_MANIFEST.json
 ```
 
-Conda environments:
+Conda environments (files in `conda_envs/`):
 
-- `snb`: QE, ShakeNBreak and the controller.
-- `fairchemv1`: EqV3 and MACE. EqV3 needs the fairchem fork in `eqv3_fairchem/`:
-  `pip install -e eqv3_fairchem --no-deps` (on UVA the env already uses the
-  ConstrDiff_Material submodule, which is identical).
+- `snb`: the controller, QE runners (QE itself comes from the cluster), ShakeNBreak, analysis.
+- `fairchemv1`: EqV3 and MACE-ft.
 - `fairchemv2`: UMA, run without `PYTHONPATH`.
+
+```bash
+conda env create -f conda_envs/snb.yml
+conda env create -f conda_envs/fairchemv2.yml
+conda env create -f conda_envs/fairchemv1.yml
+conda activate fairchemv1
+pip install --no-deps mace-torch==0.3.15 -e eqv3_fairchem
+```
+
+The pinned versions are what each env loaded on UVA, including packages it
+picked up from `~/.local`. mace-torch is installed separately because it pins
+`e3nn==0.4.4` while EqV3 needs e3nn 0.6.0. On UVA the `fairchemv1` env loads
+EqV3 from the ConstrDiff_Material submodule, which is identical to `eqv3_fairchem/`.
 
 Tests (run with the `snb` env):
 
