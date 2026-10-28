@@ -26,6 +26,7 @@ at commit `68e4e5e`.
 | `pseudos/` | QE pseudopotentials (Bi, Te pbesol rrkjus) |
 | `docs/BI2TE3_2VTE_PILOT.md` | campaign notes and results |
 | `docs/cost_analysis/` | estimated SCF times, queue waits, SU and days on Rivanna |
+| `benchmarks/qe_timing/` | QE timing test for other clusters, with Rivanna reference results |
 
 ## Running
 

@@ -14,6 +14,9 @@ estimates for the planned campaigns:
   (see ``steps_to_fmax``).
 
 ``--markdown`` prints the tables used in ``docs/cost_analysis/README.md``.
+
+It reads Rivanna campaign folders and Rivanna's Slurm history, so it only runs
+there.  To time QE on another cluster, use ``benchmarks/qe_timing``.
 """
 
 from __future__ import annotations
