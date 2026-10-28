@@ -208,5 +208,22 @@ class TightenTest(unittest.TestCase):
         self.assertNotIn("fmax_ev_per_angstrom", tasks[1])
 
 
+class BackendTest(unittest.TestCase):
+    def test_h100_needs_matching_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            structure = root / "start.extxyz"
+            ase_write(structure, cluster())
+            campaign.prepare(campaign.build_parser().parse_args(
+                ["prepare", "--output-dir", str(root / "campaign"), "--structures", str(structure), "--labels", "lj"]
+            ))
+            manifest = root / "campaign" / "relax_manifest.json"
+            self.assertIn("h100", campaign.read_json(manifest)["tasks"][0]["resource_profile"].split("_or_"))
+            args = SimpleNamespace(manifest=manifest, task_index=0, backend="h100", allocated_device="test",
+                                   qe_executable=Path("/opt/qe-7.5-a100/bin/pw.x"), npool=1, deadline=None)
+            with self.assertRaisesRegex(ValueError, "does not visibly match h100"):
+                campaign.run_task(args)
+
+
 if __name__ == "__main__":
     unittest.main()

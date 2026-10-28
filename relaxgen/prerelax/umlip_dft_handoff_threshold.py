@@ -471,7 +471,7 @@ def prepare_scf(args: argparse.Namespace) -> dict[str, Any]:
                     "ml_fmax_checkpoints_ev_per_angstrom": selection[
                         "ml_fmax_checkpoints_ev_per_angstrom"
                     ],
-                    "resource_profile": "a100_or_b200_or_cpu",
+                    "resource_profile": "a100_or_b200_or_h100_or_cpu",
                     "source_trajectory": trajectory_path.as_posix(),
                     "source_geometry_sha256": geometry_sha256(atoms),
                     "formula_counts": formula_counts(atoms),
@@ -506,7 +506,7 @@ def prepare_scf(args: argparse.Namespace) -> dict[str, Any]:
         "disk_io": "nowf",
         "geometry_dtype": "float64",
         "qe_geometry_float_significant_digits": 17,
-        "allowed_backends": ["a100", "b200", "cpu"],
+        "allowed_backends": ["a100", "b200", "h100", "cpu"],
     }
     manifest = {
         "artifact_type": "umlip_dft_handoff_scf_campaign",
@@ -630,7 +630,7 @@ def prepare_backend_check(args: argparse.Namespace) -> dict[str, Any]:
                 "task_artifact_type": "qe_backend_check_scf",
                 "case_id": reference.get("case_id"),
                 "candidate_id": reference.get("candidate_id"),
-                "resource_profile": "a100_or_b200_or_cpu",
+                "resource_profile": "a100_or_b200_or_h100_or_cpu",
                 "source_geometry_sha256": geometry_sha256(atoms),
                 "task_dir": task_dir.as_posix(),
                 "input_structure": input_path.as_posix(),
@@ -1142,7 +1142,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--manifest", type=Path, required=True)
     run.add_argument("--task-index", type=int, required=True)
     run.add_argument(
-        "--backend", "--gpu-type", dest="gpu_type", choices=("a100", "b200", "cpu"), required=True
+        "--backend", "--gpu-type", dest="gpu_type", choices=("a100", "b200", "h100", "cpu"), required=True
     )
     run.add_argument("--allocated-gpu-name", required=True)
     run.add_argument("--qe-executable", type=Path, required=True)

@@ -27,7 +27,7 @@ Everything the test needs is in the git repository, including the pseudopotentia
 
 - The relaxgen repository (`git clone` or `git pull`).
 - The `snb` conda environment: `conda env create -f conda_envs/snb.yml`.
-- A QE 7.5 build. For a GPU build, put it in a folder named `qe-7.5-a100` or `qe-7.5-b200` that matches the GPU, for example `.../qe-7.5-a100/bin/pw.x`. The relaxation runner checks the folder name. It only knows A100 and B200 GPUs so far.
+- A QE 7.5 build: the cluster's own module or one you compiled. For a GPU build, put it in a folder named after the GPU: `qe-7.5-a100`, `qe-7.5-b200` or `qe-7.5-h100`, for example `.../qe-7.5-h100/bin/pw.x`. The runners check the folder name, so it has to be a real folder with that name, not a symlink to one.
 
 ## Running the test
 
@@ -46,7 +46,7 @@ Run these from the repository root. Pick a run folder on the new cluster's scrat
 2. Set the values at the top of `run_timing_test.sh` (or export them), then submit both structures as a two-element array:
 
    ```bash
-   # GPU
+   # GPU (use BACKEND=h100 and the qe-7.5-h100 build on H100s)
    BACKEND=a100 QE_EXECUTABLE=/path/to/qe-7.5-a100/bin/pw.x PYTHON_BIN=/path/to/envs/snb/bin/python \
    sbatch --array=0-1 -p <gpu partition> --gres=gpu:1 --ntasks=1 --cpus-per-task=4 --mem=60G \
      benchmarks/qe_timing/run_timing_test.sh $RUN/relax_manifest.json

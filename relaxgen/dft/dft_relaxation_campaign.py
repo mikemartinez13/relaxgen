@@ -121,7 +121,7 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
                 "task_id": f"{task_index:04d}_{label}",
                 "label": label,
                 "task_artifact_type": "dft_bfgs_relaxation",
-                "resource_profile": "a100_or_b200_or_cpu",
+                "resource_profile": "a100_or_b200_or_h100_or_cpu",
                 "source_structure": spec,
                 "source_geometry_sha256": geometry_sha256(atoms),
                 "formula_counts": formula_counts(atoms),
@@ -495,7 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run-task", help="Run one relaxation segment inside an allocation.")
     run.add_argument("--manifest", type=Path, required=True)
     run.add_argument("--task-index", type=int, required=True)
-    run.add_argument("--backend", choices=("a100", "b200", "cpu"), required=True)
+    run.add_argument("--backend", choices=("a100", "b200", "h100", "cpu"), required=True)
     run.add_argument("--allocated-device", required=True)
     run.add_argument("--qe-executable", type=Path, required=True)
     run.add_argument("--npool", type=int, default=1, help="k-point pools (CPU backend).")

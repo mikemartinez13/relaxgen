@@ -18,12 +18,13 @@ set -euo pipefail
   echo "Usage: sbatch --array=0-1 [flags] $0 RUN_DIR/relax_manifest.json" >&2; exit 2; }
 
 # ---- Set these for the cluster (or export them before sbatch) ----------------
-BACKEND=${BACKEND:-a100}            # a100, b200 or cpu
-QE_EXECUTABLE=${QE_EXECUTABLE:?Set QE_EXECUTABLE to pw.x. A GPU build must sit in a folder named qe-7.5-a100 or qe-7.5-b200.}
+BACKEND=${BACKEND:-a100}            # a100, b200, h100 or cpu
+QE_EXECUTABLE=${QE_EXECUTABLE:?Set QE_EXECUTABLE to pw.x. A GPU build must sit in a folder named qe-7.5-a100, qe-7.5-b200 or qe-7.5-h100.}
 PYTHON_BIN=${PYTHON_BIN:-python}    # python of the snb environment (conda_envs/snb.yml)
 NPOOL=${NPOOL:-1}                   # CPU only: k-point pools; must divide the number of ranks
 # Load the compiler, MPI and CUDA libraries the QE build needs, for example:
 #   module load <compiler> <mpi> <cuda>
+# A CPU build of your own works too: point QE_EXECUTABLE at its pw.x and load its MPI.
 # -----------------------------------------------------------------------------
 
 PROJECT_ROOT=${PROJECT_ROOT:-${SLURM_SUBMIT_DIR}}
