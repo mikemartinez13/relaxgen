@@ -1,0 +1,135 @@
+{
+  "artifact_type": "bi2te3_defect_family_catalog",
+  "description": "Reviewed neutral vacancy and antisite families on the 40-site Bi16Te24 parent. Interstitials, charged defects, distortions, and relaxations are intentionally excluded.",
+  "maximum_defect_count": 3,
+  "families": [
+    {
+      "name": "VTe",
+      "description": "One Te vacancy.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Te", "count": 1}
+      ]
+    },
+    {
+      "name": "2VTe",
+      "description": "Two Te vacancies.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Te", "count": 2}
+      ]
+    },
+    {
+      "name": "3VTe",
+      "description": "Three Te vacancies.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Te", "count": 3}
+      ]
+    },
+    {
+      "name": "VBi",
+      "description": "One Bi vacancy.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Bi", "count": 1}
+      ]
+    },
+    {
+      "name": "2VBi",
+      "description": "Two Bi vacancies.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Bi", "count": 2}
+      ]
+    },
+    {
+      "name": "3VBi",
+      "description": "Three Bi vacancies.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Bi", "count": 3}
+      ]
+    },
+    {
+      "name": "Te_Bi",
+      "description": "One Te-on-Bi antisite.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Bi", "target_species": "Te", "count": 1}
+      ]
+    },
+    {
+      "name": "2Te_Bi",
+      "description": "Two Te-on-Bi antisites.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Bi", "target_species": "Te", "count": 2}
+      ]
+    },
+    {
+      "name": "3Te_Bi",
+      "description": "Three Te-on-Bi antisites.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Bi", "target_species": "Te", "count": 3}
+      ]
+    },
+    {
+      "name": "Bi_Te",
+      "description": "One Bi-on-Te antisite.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Te", "target_species": "Bi", "count": 1}
+      ]
+    },
+    {
+      "name": "2Bi_Te",
+      "description": "Two Bi-on-Te antisites.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Te", "target_species": "Bi", "count": 2}
+      ]
+    },
+    {
+      "name": "3Bi_Te",
+      "description": "Three Bi-on-Te antisites.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Te", "target_species": "Bi", "count": 3}
+      ]
+    },
+    {
+      "name": "antisite_pair",
+      "description": "Composition-preserving Te-on-Bi plus Bi-on-Te antisite pair.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "substitute", "source_species": "Bi", "target_species": "Te", "count": 1},
+        {"operation": "substitute", "source_species": "Te", "target_species": "Bi", "count": 1}
+      ]
+    },
+    {
+      "name": "VBi_VTe",
+      "description": "One Bi vacancy plus one Te vacancy.",
+      "charge": 0,
+      "enabled": true,
+      "actions": [
+        {"operation": "remove", "source_species": "Bi", "count": 1},
+        {"operation": "remove", "source_species": "Te", "count": 1}
+      ]
+    }
+  ]
+}
