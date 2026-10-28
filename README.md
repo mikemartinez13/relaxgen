@@ -18,13 +18,14 @@ at commit `68e4e5e`.
 | `relaxgen/prerelax/` | EqV3 / MACE-ft / UMA relaxers, uMLIP-to-DFT handoff thresholds |
 | `relaxgen/dft/` | resumable QE relaxation runner, QE diagnostics |
 | `relaxgen/dispatch/` | `qe_dispatch` controller (GPU/CPU backends, scrontab ticks), queue-wait survey, batch preparation |
-| `relaxgen/analysis/` | endpoint diversity (symmetry-aware RMSD), figures |
+| `relaxgen/analysis/` | endpoint diversity (symmetry-aware RMSD), figures, SCFs per relaxation, cost analysis |
 | `eqv3_fairchem/` | fairchem v1 fork with the EquiformerV3 model, needed to load the EqV3 checkpoint |
 | `relaxgen/common/` | QE/MACE calculator helpers copied from ConstrDiff_Material |
-| `experiments/` | one-off studies: VBi_001 diversity, uMLIP ensemble Stage B, resume test |
+| `experiments/` | one-off studies: VBi_001 diversity and its basins, Stage A metrics, Stage B and its symmetry check, resume test, SCF-stall check, BFGS step proxy |
 | `slurm/` | Slurm launchers for UVA Afton/Rivanna |
 | `pseudos/` | QE pseudopotentials (Bi, Te pbesol rrkjus) |
 | `docs/BI2TE3_2VTE_PILOT.md` | campaign notes and results |
+| `docs/cost_analysis/` | estimated SCF times, queue waits, SU and days on Rivanna |
 
 ## Running
 
