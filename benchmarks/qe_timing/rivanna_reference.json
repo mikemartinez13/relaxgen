@@ -1,9 +1,9 @@
 {
- "note": "Rivanna results for the structures in structures/, computed with the same QE settings (QE 7.5, precise mode, 6x6x6 k-points, Bi/Te pbesol pseudopotentials in pseudos/).",
+ "note": "Rivanna results for the structures in structures/, computed with the same QE settings (QE 7.5, precise mode, 6x6x6 k-points, Bi/Te pbesol pseudopotentials in pseudos/). Energies are in eV with ASE's unit constants, as the relaxation runner reports them; the easy_vte energy came from QE's own eV output and was rescaled from QE's Ry-to-eV factor to ASE's.",
  "structures": {
   "easy_vte": {
    "natoms": 39,
-   "first_scf_energy_ev": -45060.9277494509,
+   "first_scf_energy_ev": -45060.93133275089,
    "first_scf_forces_ev_per_angstrom": [
     [
      0.021874174365272007,

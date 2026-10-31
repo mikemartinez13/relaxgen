@@ -179,6 +179,11 @@ def _launch_command(args: argparse.Namespace) -> str:
         # Intel MPI; the launcher selects its bootstrap for one or more nodes.
         launcher = ["mpirun", "-np", str(ranks)]
         pools = args.npool
+    elif os.environ.get("QE_GPU_LAUNCHER") == "mpirun":
+        # MPI builds without Slurm PMI support (NVHPC's HPC-X on the CS cluster)
+        # cannot be started by srun; their own mpirun starts them inside the job.
+        launcher = ["mpirun", "-np", str(ranks), "--bind-to", "none"]
+        pools = ranks
     else:
         # One rank and one GPU per k-point pool; the step inherits the job's GPUs.
         launcher = ["srun", f"--ntasks={ranks}", "--cpus-per-task",

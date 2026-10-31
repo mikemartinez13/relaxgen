@@ -2,7 +2,7 @@
 
 ### Measured on UVA's Rivanna cluster (Afton nodes), October 20–28, 2026
 
-This page estimates how long our DFT relaxations take and how much they cost on Rivanna. Every number comes from our own jobs: the relaxation campaigns, the handoff threshold runs and a set of small test jobs. The script that computes them is `relaxgen/analysis/cost_analysis.py`, and the raw numbers are in `cost_numbers.json` in this folder.
+This page estimates how long our DFT relaxations take and how much they cost on Rivanna, and how much faster Plan A finishes when the CS cluster takes part of it (see [CS cluster](#cs-cluster)). Every number comes from our own jobs: the relaxation campaigns, the handoff threshold runs and a set of small test jobs. The script that computes them is `relaxgen/analysis/cost_analysis.py`, and the raw numbers are in `cost_numbers.json` in this folder.
 
 A few terms used below:
 
@@ -125,6 +125,53 @@ What this means:
 - **Plan A at 0.01 eV/Å** takes about two weeks and 1.4M SU. That fits our remaining SU comfortably.
 - **Plan B at 0.01 eV/Å** takes about two months and 5–6M SU. That is nearly all the SU the lab has left until May 2027. Tighter targets in Plan B need more SU than we have, unless they run on GPUs only, which would take six months to a year.
 - **CPU jobs do most of the work,** because they start right away. More GPU jobs save SU, because GPU SCFs are cheaper, but they save only a few days while GPU waits stay this long.
+
+## CS cluster
+
+### Measured on UVA's Computer Science cluster, October 28–29, 2026
+
+The CS cluster does not bill SU, so jobs there cost nothing from the `raiselab` allocation. The numbers below come from the timing test in `benchmarks/qe_timing/` (5–6 SCFs per structure on each kind of hardware), not from production campaigns.
+
+**Hardware we use.** We use only the 8 H100 NVL GPUs (`serval06-09`, 2 per node) and the 4 A100 80GB GPUs (`cheetah04`). We do not use:
+
+- **The A100 40GB GPUs on `cheetah01`.** They are the PCIe version and took 76 min for an SCF from scratch, 1.6 times slower than the A100 80GB.
+- **The other GPUs** (GeForce, Quadro, RTX A-series, A40, A16, P100). They are slow at the double-precision math QE needs, or have too little memory. QE estimates 36 GB per GPU for our structures.
+- **CPU nodes.** A 28-rank job on one `bigcat` node took 524 min for an SCF from scratch and 270 min inside a relaxation, about 0.43 times the speed of an Afton core. With the per-user limit of 200 cores, CPU jobs would add about 3% to what the GPUs do.
+
+| Hardware | SCF from scratch, median | SCF inside a relaxation, median | One relaxation, 15 SCFs |
+|---|---|---|---|
+| H100 NVL | 28 min | 18.5 min | 4.8 h |
+| A100 80GB | 51 min | 33 min | 8.6 h |
+
+The H100 is 1.6–1.8 times faster than an A100 80GB, close to Rivanna's B200. The CS cluster's A100 80GB is about 10% slower than Rivanna's. The relaxation times assume each relaxation runs as one job, since jobs on the CS cluster can last up to 4 days.
+
+**Same results as Rivanna.** The first SCF of both test structures matched Rivanna within 0.01 meV in energy and 3×10⁻⁵ eV/Å in every force, on both GPUs and on the CPU build. Relaxations can move between the two clusters.
+
+**Queue time.** The six GPU test jobs waited between 5 min and 5.3 h, with a median of 2.0 h. That is too few jobs for a reliable estimate. We share these GPUs with the rest of the department, so the tables below give two cases: all 12 GPUs running our jobs all the time, and half of them.
+
+### Plan A on both clusters
+
+Rivanna runs ~3 GPUs and 71 CPU jobs, as in the first column of the Plan A table above. It finishes about 5.8 relaxations per hour at 0.01 eV/Å. All 12 CS GPUs finish about 2.1 per hour.
+
+| DFT fmax target | Rivanna alone | Both clusters, all 12 CS GPUs | Both clusters, half of the CS GPUs | Share done on the CS cluster | SU saved |
+|---|---|---|---|---|---|
+| 0.01 eV/Å | 15 days, 1.4M SU | 11 days | 13 days | 16–27% | 0.22–0.39M |
+| 0.005 eV/Å | 24 days, 2.3M SU | 18 days | 20 days | 16–27% | 0.35–0.61M |
+| 0.001 eV/Å | 40 days, 3.8M SU | 29 days | 34 days | 16–27% | 0.59–1.03M |
+
+Each cluster must get the share it can finish in the same time, because a relaxation cannot move to the other cluster's queue by itself. At 0.01 eV/Å:
+
+- **Rivanna:** the first ~1,724 relaxations, including the 200 already running.
+- **CS cluster:** the last 400. That is 19% of Plan A, the CS share if we get about 63% of its 12 GPUs.
+
+If the CS cluster gets all 12 GPUs, its 400 finish in 8 days and Rivanna's 1,724 in 12. If it gets only half, its 400 take 16 days. Check after about a week, and move relaxations that have not started from the slower cluster to the faster one. Relaxations that have started can move too, since both clusters give the same results and a relaxation resumes from its last step, but moving only unstarted ones is simpler.
+
+### Running on the CS cluster
+
+- Load `nvhpc/26.1-CUDA-13.1.0`, then the HPC-X MPI that comes with it: `source <nvhpc>/comm_libs/13.1/hpcx/hpcx-2.25.1/hpcx-init.sh && hpcx_load`.
+- Set `QE_GPU_LAUNCHER=mpirun`. HPC-X cannot be started by `srun` on this cluster, because Slurm here only supports PMI-2.
+- Ask for memory: `--mem=60G` for one GPU. Both the `gpu` and `cpu` partitions default to 256 MB per CPU.
+- Pick the GPU with `--constraint=h100_94gb` (QE build `qe-7.5-h100`, `BACKEND=h100`) or `--constraint=a100_80gb` (`qe-7.5-a100`, `BACKEND=a100`).
 
 ## Updating these numbers
 
