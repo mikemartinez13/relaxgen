@@ -59,6 +59,10 @@ from statistics import median
 from typing import Any, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from relaxgen.dispatch import clusters  # noqa: E402
 ACTIVE_STATES = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "REQUEUED", "RESIZING", "SUSPENDED"}
 HISTORY_WINDOW = "now-3days"
 CLAIM_REFRESH_SECONDS = 60
@@ -184,123 +188,15 @@ class SlurmCLI:
 # --------------------------------------------------------------------------
 
 
-PILOT_BACKEND_CHECK = Path(
-    "/sfs/weka/scratch/gqs7zr/ai4mat/results/bi2te3_2vte_pilot/10_qe_backend_check_fullnode"
-)
-
-
-def backend_check_summary(manifest_dir: Path) -> Path:
-    """The full-node CPU backend check: the nearest one above the campaign, else the pilot's."""
-
-    for directory in (manifest_dir, *manifest_dir.parents):
-        check = directory / "10_qe_backend_check_fullnode"
-        if check.is_dir():
-            return check / "backend_check_summary.json"
-    return PILOT_BACKEND_CHECK / "backend_check_summary.json"
-
-
-def default_backends(manifest_dir: Path) -> list[dict[str, Any]]:
-    """Backends for single-point manifests; runtimes are seeded from measured runs."""
-
-    fullnode_check = backend_check_summary(manifest_dir)
-    return [
-        {
-            "name": "gpu",
-            "kind": "gpu",
-            "launcher": "slurm/run_umlip_dft_handoff_scf_slurm_uva.sh",
-            "sbatch_args": [],
-            "env": {},
-            "max_jobs": 32,
-            "cores": 0,
-            "wait_partitions": ["gpu-a100", "gpu-b200"],
-            # A100 ~48 min, B200 ~29 min per production SCF (2026-10-22).
-            "runtime_prior_seconds": 2600,
-            "wait_prior_seconds": 900,
-            "check": None,
-        },
-        {
-            "name": "cpu-parallel-2x42",
-            "kind": "cpu",
-            "launcher": "slurm/run_qe_scf_cpu_slurm_uva.sh",
-            "sbatch_args": ["-p", "parallel", "-N2", "--ntasks=84", "--ntasks-per-node=42",
-                            "--mem-per-cpu=16G", "--time=06:00:00"],
-            "env": {"NPOOL": "28"},
-            "max_jobs": 8,
-            "cores": 84,
-            "wait_partitions": ["parallel"],
-            "runtime_prior_seconds": None,
-            "wait_prior_seconds": 6 * 3600,
-            "check": {"summary": fullnode_check.as_posix(), "task_index": 0},
-        },
-        {
-            "name": "cpu-standard-42",
-            "kind": "cpu",
-            "launcher": "slurm/run_qe_scf_cpu_slurm_uva.sh",
-            "sbatch_args": ["-p", "standard", "-N1", "-C", "afton", "--ntasks=42",
-                            "--mem-per-cpu=16G", "--time=08:00:00"],
-            "env": {"NPOOL": "14"},
-            "max_jobs": 8,
-            "cores": 42,
-            "wait_partitions": ["standard"],
-            "runtime_prior_seconds": None,
-            "wait_prior_seconds": 24 * 3600,
-            "check": {"summary": fullnode_check.as_posix(), "task_index": 1},
-        },
-    ]
-
-
-def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
-    """Backends for resumable relaxations; 1- and 2-GPU requests race for each unit."""
-
-    fullnode_check = default_backends(manifest_dir)[1]["check"]
-    gpu = {
-        "kind": "gpu",
-        "launcher": "slurm/run_dft_relax_slurm_uva.sh",
-        "env": {},
-        "cores": 0,
-        "wait_partitions": ["gpu-a100", "gpu-b200"],
-        # Median of 1-GPU 12 h queue probes, 2026-10-24.
-        "wait_prior_seconds": 3.4 * 3600,
-        "check": None,
-    }
-    return [
-        # Step priors are slow-case (from-scratch) production SCFs: B200 29 min,
-        # A100 46 min on one GPU (2026-10-22); two GPUs assumed ~1.8x faster.
-        {**gpu, "name": "gpu-1x", "sbatch_args": [], "max_jobs": 10,
-         "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
-         "step_prior_seconds": 2800},
-        {**gpu, "name": "gpu-2x", "sbatch_args": ["--gres=gpu:2", "--ntasks=2", "--mem=100G"],
-         "max_jobs": 5, "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
-         "step_prior_seconds": 1600},
-        {
-            "name": "cpu-parallel-2x42",
-            "kind": "cpu",
-            "launcher": "slurm/run_dft_relax_cpu_slurm_uva.sh",
-            "sbatch_args": ["-p", "parallel", "-N2", "--ntasks=84", "--ntasks-per-node=42",
-                            "--mem-per-cpu=16G", "--time=24:00:00"],
-            "env": {"NPOOL": "28"},
-            "max_jobs": 5,
-            "cores": 84,
-            "wait_partitions": ["parallel"],
-            "runtime_prior_seconds": 24 * 3600,
-            "segment_seconds": 24 * 3600,
-            # p90 of Stage B's measured steps (2026-10-24); the backend check's SCF
-            # wall time is used first when there is one.
-            "step_prior_seconds": 80 * 60,
-            # 2-node probes waited a median 4-7 min (p90 ~1.5 h) for any limit, 2026-10-24.
-            "wait_prior_seconds": 15 * 60,
-            "check": fullnode_check,
-        },
-    ]
-
-
 def init(args: argparse.Namespace) -> dict[str, Any]:
     dispatch_dir = args.dispatch_dir.expanduser().resolve()
     config_path = dispatch_dir / "config.json"
     if config_path.exists() and not args.overwrite:
         raise FileExistsError(f"Refusing to overwrite {config_path}; pass --overwrite.")
     manifest = args.manifest.expanduser().resolve()
+    cluster = args.cluster or clusters.detect_cluster()
     config = {
+        "cluster": cluster,
         "manifest": manifest.as_posix(),
         "job_name": args.job_name,
         "max_attempts": 3,
@@ -318,7 +214,7 @@ def init(args: argparse.Namespace) -> dict[str, Any]:
         "workload": args.workload,
         # Relaxations running on CPU move to a GPU as soon as one of their GPU jobs starts.
         "handover_to_gpu": args.workload == "relax",
-        "backends": (relax_backends if args.workload == "relax" else default_backends)(manifest.parent),
+        "backends": clusters.backends_for(cluster, args.workload, manifest.parent),
     }
     write_json_atomic(config_path, config)
     for sub in ("claims", "events", "slurm", "preempt"):
@@ -950,6 +846,8 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--job-name", required=True, help="Slurm job name shared by this campaign's jobs.")
     init_parser.add_argument("--cpu-core-budget", type=int, default=1000)
     init_parser.add_argument("--workload", choices=("scf", "relax"), default="scf")
+    init_parser.add_argument("--cluster", choices=sorted(clusters.PROFILES),
+                             help="Backend profile (relaxgen/dispatch/clusters.py); detected from Slurm by default.")
     init_parser.add_argument("--overwrite", action="store_true")
 
     tick_parser = sub.add_parser("tick", help="Refresh state and submit or cancel jobs.")

@@ -17,15 +17,15 @@ at commit `68e4e5e`.
 | `relaxgen/structures/` | defect enumeration, ShakeNBreak candidates |
 | `relaxgen/prerelax/` | EqV3 / MACE-ft / UMA relaxers, uMLIP-to-DFT handoff thresholds |
 | `relaxgen/dft/` | resumable QE relaxation runner, QE diagnostics |
-| `relaxgen/dispatch/` | `qe_dispatch` controller (GPU/CPU backends, scrontab ticks), queue-wait survey, batch preparation |
+| `relaxgen/dispatch/` | `qe_dispatch` controller (GPU/CPU backends, scrontab ticks), per-cluster backend lists (`clusters.py`), queue-wait survey, batch preparation |
 | `relaxgen/analysis/` | endpoint diversity (symmetry-aware RMSD), figures, SCFs per relaxation, cost analysis |
 | `eqv3_fairchem/` | fairchem v1 fork with the EquiformerV3 model, needed to load the EqV3 checkpoint |
 | `relaxgen/common/` | QE/MACE calculator helpers copied from ConstrDiff_Material |
 | `experiments/` | one-off studies: VBi_001 diversity and its basins, Stage A metrics, Stage B and its symmetry check, resume test, SCF-stall check, BFGS step proxy |
-| `slurm/` | Slurm launchers for UVA Afton/Rivanna |
+| `slurm/` | Slurm launchers: `*_uva.sh` for UVA Afton/Rivanna, `*_cs.sh` for the UVA CS cluster |
 | `pseudos/` | QE pseudopotentials (Bi, Te pbesol rrkjus) |
 | `docs/BI2TE3_2VTE_PILOT.md` | campaign notes and results |
-| `docs/cost_analysis/` | estimated SCF times, queue waits, SU and days on Rivanna |
+| `docs/cost_analysis/` | estimated SCF times, queue waits, SU and days on Rivanna and the CS cluster |
 | `benchmarks/qe_timing/` | QE timing test for other clusters, with Rivanna reference results |
 
 ## Running
@@ -35,6 +35,19 @@ Run modules from the repository root with `-m`, for example:
 ```bash
 python -m relaxgen.dispatch.qe_dispatch tick --dispatch-dir DISPATCH_DIR
 sbatch --array=0 slurm/run_dft_relax_cpu_slurm_uva.sh RELAX_MANIFEST.json
+```
+
+`qe_dispatch init` takes its backends from `relaxgen/dispatch/clusters.py` for
+the cluster it runs on (Slurm `ClusterName`; `--cluster rivanna|cs` overrides
+it). Rivanna runs ticks from `scrontab`. The CS cluster has no `scrontab` and
+only relaxation backends, on H100 and A100 80GB GPUs, so a CS campaign is:
+
+```bash
+python -m relaxgen.dispatch.qe_dispatch init --workload relax \
+  --dispatch-dir DISPATCH_DIR --manifest RELAX_MANIFEST.json --job-name qd_<campaign>
+sbatch --job-name=tick_<campaign> --output=DISPATCH_DIR/slurm/%x-%j.out \
+  slurm/run_dispatch_ticker_cs.sh DISPATCH_DIR      # ticks every 10 min until the campaign is done
+touch DISPATCH_DIR/STOP_TICKER                       # stops the ticker early
 ```
 
 Conda environments (files in `conda_envs/`):

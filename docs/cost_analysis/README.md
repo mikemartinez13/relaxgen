@@ -168,6 +168,8 @@ If the CS cluster gets all 12 GPUs, its 400 finish in 8 days and Rivanna's 1,724
 
 ### Running on the CS cluster
 
+Campaigns run through `qe_dispatch` with the `cs` backend list in `relaxgen/dispatch/clusters.py` and the launcher `slurm/run_dft_relax_slurm_cs.sh`, which does all of the following itself (see the top-level `README.md`). For jobs submitted by hand, such as the timing test:
+
 - Load `nvhpc/26.1-CUDA-13.1.0`, then the HPC-X MPI that comes with it: `source <nvhpc>/comm_libs/13.1/hpcx/hpcx-2.25.1/hpcx-init.sh && hpcx_load`.
 - Set `QE_GPU_LAUNCHER=mpirun`. HPC-X cannot be started by `srun` on this cluster, because Slurm here only supports PMI-2.
 - Ask for memory: `--mem=60G` for one GPU. Both the `gpu` and `cpu` partitions default to 256 MB per CPU.

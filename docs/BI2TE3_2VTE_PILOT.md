@@ -710,7 +710,13 @@ How it works:
   0.1 meV/cell and 1e-3 eV/Angstrom. `tick` re-runs the comparison itself
   whenever a check task finishes.
 - **Ticks.** Each worker runs a tick when it exits. For a steady cadence, add
-  a `scrontab` entry that runs `tick` every 10 minutes.
+  a `scrontab` entry that runs `tick` every 10 minutes. The CS cluster has no
+  `scrontab`; there `slurm/run_dispatch_ticker_cs.sh` ticks from a one-core
+  job on the `nolim` partition.
+- **Clusters.** The backends above are Rivanna's. `init` writes the backend
+  list of the cluster it runs on (`relaxgen/dispatch/clusters.py`) into
+  `config.json`; the CS cluster has one relaxation backend, one H100 or
+  A100 80GB GPU per job with 24 h segments.
 
 The SCF launchers run under the worker whenever `DISPATCH_DIR` is set, and
 are unchanged otherwise.
