@@ -31,4 +31,10 @@ export SLURM_CPU_BIND_TYPE=cores
 export SLURM_MPI_TYPE=pmix
 export OMPI_MCA_btl=^openib
 export UCX_WARN_UNUSED_ENV_VARS=n
+# srun refuses to start when more than one of SLURM_MEM_PER_{CPU,GPU,NODE} is
+# set, which happens when the job inherits SLURM_MEM_PER_CPU from the shell that
+# submitted it (sbatch --export=ALL).  The GPU launchers ask for memory per node.
+if [[ -n "${SLURM_MEM_PER_NODE:-}" ]]; then
+  unset SLURM_MEM_PER_CPU SLURM_MEM_PER_GPU
+fi
 unset qe_gpu_dir
