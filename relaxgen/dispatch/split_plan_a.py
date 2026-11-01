@@ -13,6 +13,11 @@ handoff frame that is not already in batch 1 and splits them:
   writes the CS manifest with batch 1's protocol.
 - The rest become the next Rivanna batch, prepared here.
 
+Candidates whose EqV3 relaxation never reached the handoff force (its step
+limit ran out) start from their lowest-force frame with safe distances, unless
+that force is above ``--fallback-max-fmax`` (EqV3 likely failed).  They go to
+Rivanna only, after the CS draw, so the CS share does not depend on them.
+
 Both lists are shuffled with the same seed, so the dispatcher works through
 every family at once and a partly finished campaign is a fair sample.
 
@@ -32,6 +37,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+from ase.io import iread
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -86,6 +92,40 @@ def split(candidates: list[dict[str, Any]], cs_count: int, seed: int) -> tuple[l
     return [rivanna[i] for i in rng.permutation(len(rivanna))], [cs[i] for i in rng.permutation(len(cs))]
 
 
+def lowest_force_frame(trajectory: Path, min_distance: float) -> dict[str, Any] | None:
+    """The frame with the lowest ML fmax among frames with no pair closer than ``min_distance``."""
+
+    best = None
+    for index, atoms in enumerate(iread(trajectory, index=":")):
+        fmax = float(atoms.info.get("ml_fmax_ev_per_angstrom", np.inf))
+        distance = float(atoms.get_all_distances(mic=True)[np.triu_indices(len(atoms), 1)].min())
+        if distance >= min_distance and (best is None or fmax < best["ml_fmax"]):
+            best = {"frame": index, "ml_fmax": fmax, "min_distance": distance,
+                    "optimizer_step": int(atoms.info.get("optimizer_step", index))}
+    return best
+
+
+def add_fallbacks(rivanna: list, skipped: list, max_fmax: float, min_distance: float, seed: int) -> tuple[list, list]:
+    """Insert skipped candidates that have a usable lowest-force frame into ``rivanna`` at random places."""
+
+    added, still_skipped = [], []
+    for entry in skipped:
+        frame = lowest_force_frame(Path(entry["eqv3_trajectory"]), min_distance)
+        if frame is None or frame["ml_fmax"] > max_fmax:
+            still_skipped.append({**entry, "reason": f"no frame with min distance >= {min_distance} A and "
+                                                     f"ML fmax <= {max_fmax}"})
+            continue
+        candidate = {key: value for key, value in entry.items() if key != "reason"}
+        added.append({**candidate, "handoff": {**frame, "rule": "lowest_force_fallback"},
+                      "structure": f"{entry['eqv3_trajectory']}@{frame['frame']}"})
+    # A separate generator, so the CS draw and Rivanna's order do not depend on this step.
+    rng = np.random.default_rng([seed, 1])
+    merged = list(rivanna)
+    for candidate in added:
+        merged.insert(int(rng.integers(len(merged) + 1)), candidate)
+    return merged, still_skipped
+
+
 def plan_a_candidates(eqv3_dir: Path, handoff_fmax: float, min_distance: float) -> tuple[list, list]:
     selected, skipped = [], []
     for path in sorted(eqv3_dir.glob("*/*/*/status.json")):
@@ -136,6 +176,9 @@ def run(args: argparse.Namespace) -> None:
                                           args.min_distance)
     remaining = [candidate for candidate in selected if candidate["label"] not in excluded]
     rivanna, cs = split(remaining, args.cs_count, args.seed)
+    fallback_labels = {entry["label"] for entry in skipped} - excluded
+    rivanna, skipped = add_fallbacks(rivanna, [e for e in skipped if e["label"] in fallback_labels],
+                                     args.fallback_max_fmax, args.min_distance, args.seed)
 
     bundle = args.cs_bundle_dir.expanduser().resolve()
     if bundle.exists() and not args.overwrite:
@@ -145,6 +188,8 @@ def run(args: argparse.Namespace) -> None:
         "excluded_manifests": [m.as_posix() for m in args.exclude_manifest], "excluded_count": len(excluded),
         "seed": args.seed, "handoff_fmax_ev_per_angstrom": args.handoff_fmax,
         "min_distance_angstrom": args.min_distance, "dft_fmax_ev_per_angstrom": args.fmax,
+        "fallback_max_fmax_ev_per_angstrom": args.fallback_max_fmax,
+        "fallback_count": sum(t["handoff"].get("rule") == "lowest_force_fallback" for t in rivanna),
         "rivanna_count": len(rivanna), "cs_count": len(cs), "skipped": skipped,
     }
 
@@ -160,8 +205,8 @@ def run(args: argparse.Namespace) -> None:
         indent=2) + "\n")
     write_cs_bundle(bundle, cs, {**record, "cluster": "cs"}, args)
 
-    print(f"{len(selected)} candidates have a handoff frame ({len(skipped)} do not); "
-          f"{len(excluded)} excluded as already prepared.")
+    print(f"{len(selected)} candidates have a handoff frame; {record['fallback_count']} more start from their "
+          f"lowest-force frame (Rivanna); {len(skipped)} left out; {len(excluded)} excluded as already prepared.")
     print(f"Rivanna: {len(rivanna)} relaxations in {out}")
     print(f"CS cluster: {len(cs)} relaxations in {bundle}")
     counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -185,6 +230,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eqv3-dir", type=Path, default=DEFAULT_EQV3_DIR)
     parser.add_argument("--handoff-fmax", type=float, default=0.02)
     parser.add_argument("--min-distance", type=float, default=2.0)
+    parser.add_argument("--fallback-max-fmax", type=float, default=5.0,
+                        help="Highest ML fmax (eV/A) a candidate without a handoff frame may start from.")
     parser.add_argument("--fmax", type=float, default=0.01)
     parser.add_argument("--max-steps", type=int, default=400)
     parser.add_argument("--description", default="")
