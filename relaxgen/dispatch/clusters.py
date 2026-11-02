@@ -108,6 +108,12 @@ def default_backends(manifest_dir: Path) -> list[dict[str, Any]]:
     ]
 
 
+# Queued GPU relaxations give way to the user's other GPU jobs: a nice of 10000
+# cancels the most the age factor can add (PriorityWeightAge), so in a shared
+# partition they rank below anything submitted without one (2026-11-02).
+RELAX_GPU_NICE = "--nice=10000"
+
+
 def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
     """Backends for resumable relaxations; 1- and 2-GPU requests race for each unit."""
 
@@ -125,10 +131,10 @@ def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
     return [
         # Step priors are slow-case (from-scratch) production SCFs: B200 29 min,
         # A100 46 min on one GPU (2026-10-22); two GPUs assumed ~1.8x faster.
-        {**gpu, "name": "gpu-1x", "sbatch_args": [], "max_jobs": 10,
+        {**gpu, "name": "gpu-1x", "sbatch_args": [RELAX_GPU_NICE], "max_jobs": 10,
          "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
          "step_prior_seconds": 2800},
-        {**gpu, "name": "gpu-2x", "sbatch_args": ["--gres=gpu:2", "--ntasks=2", "--mem=100G"],
+        {**gpu, "name": "gpu-2x", "sbatch_args": ["--gres=gpu:2", "--ntasks=2", "--mem=100G", RELAX_GPU_NICE],
          "max_jobs": 5, "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
          "step_prior_seconds": 1600},
         {
