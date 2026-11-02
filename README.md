@@ -56,6 +56,10 @@ queued relaxations, and releases them once none is waiting. Running
 relaxations keep their GPUs, and the relaxations' priority against other
 users is unchanged.
 
+Rivanna relaxations do the same for your jobs waiting for A100 or B200 GPUs.
+Neither cluster yields to another dispatch campaign (job names starting with
+`qd_`); campaigns share GPUs through their `max_jobs` caps.
+
 Conda environments (files in `conda_envs/`):
 
 - `snb`: the controller, QE runners (QE itself comes from the cluster), ShakeNBreak, analysis.

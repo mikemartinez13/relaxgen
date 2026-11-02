@@ -108,10 +108,20 @@ def default_backends(manifest_dir: Path) -> list[dict[str, Any]]:
     ]
 
 
-# Queued GPU relaxations give way to the user's other GPU jobs: a nice of 10000
-# cancels the most the age factor can add (PriorityWeightAge), so in a shared
-# partition they rank below anything submitted without one (2026-11-02).
-RELAX_GPU_NICE = "--nice=10000"
+# Job names of dispatch campaigns (``qe_dispatch init --job-name``).  A campaign
+# does not yield to these: campaigns share GPUs through their max_jobs caps, and
+# two campaigns yielding to each other would take turns holding their jobs.
+DISPATCH_JOB_PREFIXES = ["qd_"]
+
+# Queued GPU relaxations are held while any of the user's other jobs waits for
+# A100 or B200 GPUs, so they start only after it (2026-11-02).  Holding, unlike
+# --nice, leaves their priority against other users unchanged.
+RIVANNA_RELAX_YIELD = {
+    "partitions": ["gpu-a100-40", "gpu-a100-80", "gpu-b200"],
+    "features": ["a100", "a100_40gb", "a100_80gb", "gpupod", "b200"],
+    "gres_types": ["a100", "b200"],
+    "peer_prefixes": DISPATCH_JOB_PREFIXES,
+}
 
 
 def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
@@ -127,14 +137,15 @@ def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
         # Median of 1-GPU 12 h queue probes, 2026-10-24.
         "wait_prior_seconds": 3.4 * 3600,
         "check": None,
+        "yield_to": RIVANNA_RELAX_YIELD,
     }
     return [
         # Step priors are slow-case (from-scratch) production SCFs: B200 29 min,
         # A100 46 min on one GPU (2026-10-22); two GPUs assumed ~1.8x faster.
-        {**gpu, "name": "gpu-1x", "sbatch_args": [RELAX_GPU_NICE], "max_jobs": 10,
+        {**gpu, "name": "gpu-1x", "sbatch_args": [], "max_jobs": 10,
          "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
          "step_prior_seconds": 2800},
-        {**gpu, "name": "gpu-2x", "sbatch_args": ["--gres=gpu:2", "--ntasks=2", "--mem=100G", RELAX_GPU_NICE],
+        {**gpu, "name": "gpu-2x", "sbatch_args": ["--gres=gpu:2", "--ntasks=2", "--mem=100G"],
          "max_jobs": 5, "runtime_prior_seconds": 12 * 3600, "segment_seconds": 12 * 3600,
          "step_prior_seconds": 1600},
         {
@@ -198,7 +209,7 @@ def cs_relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
             # for these GPUs, so they start only after it (2026-11-02).  Holding,
             # unlike --nice, leaves their priority against other users unchanged.
             "yield_to": {"partitions": ["gpu"], "features": CS_GPU_FEATURES,
-                         "gres_types": CS_GPU_GRES_TYPES},
+                         "gres_types": CS_GPU_GRES_TYPES, "peer_prefixes": DISPATCH_JOB_PREFIXES},
         },
     ]
 

@@ -204,6 +204,17 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(summary["backends"][0]["yielding_to"], [])
         self.assertFalse(any("--hold" in command for command in slurm.submitted))
 
+    def test_other_dispatch_campaigns_are_not_yielded_to(self):
+        rule = {"partitions": ["gpu"], "features": [], "gres_types": [], "peer_prefixes": ["qd_"]}
+        self.configure([{**backend("gpu", "gpu", max_jobs=1), "yield_to": rule}])
+        slurm = FakeSlurm()
+        slurm.others = [QueuedJob("7006", "qd_other_batch", "Priority", True, frozenset(), frozenset())]
+        summary = tick(self.dispatch, slurm, now=NOW)
+        self.assertEqual(summary["backends"][0]["yielding_to"], [])
+        slurm.others.append(QueuedJob("7007", "eval_x", "Priority", True, frozenset(), frozenset()))
+        summary = tick(self.dispatch, slurm, now=NOW + timedelta(minutes=10))
+        self.assertEqual(summary["backends"][0]["yielding_to"], ["7007"])
+
     def test_a_hold_placed_by_hand_is_not_released(self):
         self.yielding_gpu(max_jobs=1)
         slurm = FakeSlurm()

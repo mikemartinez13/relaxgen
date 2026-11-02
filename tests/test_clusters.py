@@ -64,7 +64,8 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual([b["name"] for b in relax], ["gpu-1x", "gpu-2x", "cpu-parallel-2x42"])
         self.assertTrue(all(b["launcher"].endswith("_uva.sh") for b in relax))
         for backend in relax:
-            self.assertEqual(clusters.RELAX_GPU_NICE in backend["sbatch_args"], backend["kind"] == "gpu")
+            self.assertEqual("yield_to" in backend, backend["kind"] == "gpu")
+            self.assertFalse(any(arg.startswith("--nice") for arg in backend["sbatch_args"]))
 
 
 class InitTest(unittest.TestCase):

@@ -24,7 +24,9 @@ hand-off anyway, and finishes no later than the CPU would have.
 
 A backend with a ``yield_to`` rule gives way to this user's other jobs: while
 one of them waits for the GPUs the rule names, ``tick`` holds the campaign's
-queued jobs on that backend and releases them once none is waiting.
+queued jobs on that backend and releases them once none is waiting.  Jobs whose
+names start with one of the rule's ``peer_prefixes`` belong to other dispatch
+campaigns, which share the GPUs through their ``max_jobs`` caps instead.
 
 A manifest task with ``"withdrawn": true`` is no longer wanted: ``tick``
 cancels all of its jobs, queued or running, and never submits it again.
@@ -681,7 +683,8 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
             continue
         others = [
             job.key for job in slurm.pending_jobs(rule["partitions"])
-            if job.name != config["job_name"] and competes_for_gpus(job, rule)
+            if job.name != config["job_name"] and not job.name.startswith(tuple(rule.get("peer_prefixes", [])))
+            and competes_for_gpus(job, rule)
         ]
         backend["yielding_to"] = others
         queued = [sub for sub in all_subs if sub["backend"] == backend["name"] and sub.get("state") == "PENDING"]
