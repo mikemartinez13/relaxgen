@@ -14,7 +14,7 @@ from unittest import mock
 
 from relaxgen.dispatch import qe_dispatch
 from relaxgen.dispatch.qe_dispatch import (
-    JobInfo, failed_attempt, take_over_from_cpu, tick, worker, write_json_atomic, zero_progress,
+    JobInfo, QueuedJob, failed_attempt, take_over_from_cpu, tick, worker, write_json_atomic, zero_progress,
 )
 
 NOW = datetime(2026, 10, 22, 12, 0, 0)
@@ -26,6 +26,7 @@ class FakeSlurm:
         self.waits = waits or {}
         self.submitted: list[list[str]] = []
         self.cancelled: list[str] = []
+        self.others: list[QueuedJob] = []
         self.next_id = 1000
 
     def active_jobs(self, name: str) -> dict[str, JobInfo]:
@@ -41,13 +42,27 @@ class FakeSlurm:
         self.next_id += 1
         self.submitted.append(list(command))
         index = next(arg for arg in command if arg.startswith("--array=")).split("=")[1]
-        self.jobs[f"{self.next_id}_{index}"] = JobInfo(f"{self.next_id}_{index}", "PENDING", NOW, None)
+        reason = "JobHeldUser" if "--hold" in command else "Priority"
+        self.jobs[f"{self.next_id}_{index}"] = JobInfo(f"{self.next_id}_{index}", "PENDING", NOW, None, reason=reason)
         return str(self.next_id)
 
     def cancel(self, keys):
         self.cancelled.extend(keys)
         for key in keys:
             self.jobs[key].state = "CANCELLED"
+
+    def pending_jobs(self, partitions):
+        campaign = [QueuedJob(k, "qd_test", j.reason, True, frozenset(), frozenset())
+                    for k, j in self.jobs.items() if j.state == "PENDING"]
+        return campaign + self.others
+
+    def hold(self, keys):
+        for key in keys:
+            self.jobs[key].reason = "JobHeldUser"
+
+    def release(self, keys):
+        for key in keys:
+            self.jobs[key].reason = "Priority"
 
 
 def backend(name, kind, *, max_jobs, cores=0, runtime=3000.0, wait=600.0, check=None, partitions=None):
@@ -69,6 +84,16 @@ class SlurmCLITest(unittest.TestCase):
         self.assertIn("21905996,21910895", run.call_args[0][0])
         self.assertEqual(jobs["21910895_387"].state, "CANCELLED")
         self.assertEqual(jobs["21905996_389"].state, "COMPLETED")
+
+    def test_pending_jobs_parses_gpu_requests_and_constraints(self):
+        output = ("6782961_25|qd_cs_b01|Priority|gres/gpu:1|N/A|cpu:4|h100_94gb|a100_80gb|\n"
+                  "6790001|eval_x|Resources|gres/gpu:a100:2|N/A|N/A|(null)|\n"
+                  "6790002|prep|Priority|N/A|N/A|N/A|(null)|\n")
+        with mock.patch.object(qe_dispatch.SlurmCLI, "_run", return_value=output):
+            relax, evaluation, cpu_only = qe_dispatch.SlurmCLI("me").pending_jobs(["gpu"])
+        self.assertEqual(relax.features, {"h100_94gb", "a100_80gb"})
+        self.assertEqual((evaluation.gpu, evaluation.gpu_types, evaluation.features), (True, {"a100"}, set()))
+        self.assertFalse(cpu_only.gpu)
 
 
 class DispatchTest(unittest.TestCase):
@@ -135,6 +160,59 @@ class DispatchTest(unittest.TestCase):
         self.configure([backend("gpu", "gpu", max_jobs=1, wait=99999, partitions=["gpu-a100"])])
         summary = tick(self.dispatch, FakeSlurm(waits={"gpu-a100": [60, 300, 600]}), now=NOW)
         self.assertEqual(summary["backends"][0]["wait_seconds"], 300)
+
+    def yielding_gpu(self, max_jobs=3):
+        rule = {"partitions": ["gpu"], "features": ["h100_94gb", "a100_80gb"], "gres_types": ["a100"]}
+        self.configure([{**backend("gpu", "gpu", max_jobs=max_jobs), "yield_to": rule}])
+
+    def holds(self, summary, action):
+        return sorted(k for d in summary["decisions"] if d["action"] == action for k in d["jobs"])
+
+    def test_queued_jobs_are_held_while_another_gpu_job_of_the_user_waits(self):
+        self.yielding_gpu(max_jobs=3)
+        slurm = FakeSlurm()
+        tick(self.dispatch, slurm, now=NOW)
+        first = sorted(slurm.jobs)
+        slurm.others = [QueuedJob("7000", "eval_x", "Priority", True, frozenset(), frozenset())]
+        summary = tick(self.dispatch, slurm, now=NOW + timedelta(minutes=10))
+        self.assertEqual(self.holds(summary, "hold"), first)
+        self.assertEqual(summary["backends"][0]["yielding_to"], ["7000"])
+        # A job submitted while yielding is queued held.
+        slurm.jobs[first[0]].state = "COMPLETED"
+        write_json_atomic(Path(self.tasks[0]["status"]), {"scientifically_converged": True})
+        summary = tick(self.dispatch, slurm, now=NOW + timedelta(minutes=20))
+        self.assertEqual(self.submitted_backends(summary), [(3, "gpu")])
+        self.assertIn("--hold", slurm.submitted[-1])
+        # Once the other job has started, every hold placed here is lifted.
+        slurm.others = []
+        summary = tick(self.dispatch, slurm, now=NOW + timedelta(minutes=30))
+        self.assertEqual(self.holds(summary, "release"), sorted(k for k, j in slurm.jobs.items() if j.state == "PENDING"))
+        self.assertTrue(all(j.reason == "Priority" for j in slurm.jobs.values() if j.state == "PENDING"))
+
+    def test_jobs_that_cannot_use_the_backend_gpus_are_not_yielded_to(self):
+        self.yielding_gpu()
+        slurm = FakeSlurm()
+        none = frozenset()
+        slurm.others = [
+            QueuedJob("7001", "rtx", "Priority", True, none, frozenset({"rtx_6000"})),
+            QueuedJob("7002", "a40", "Resources", True, frozenset({"nvidia_a40"}), none),
+            QueuedJob("7003", "held", "JobHeldUser", True, none, none),
+            QueuedJob("7004", "after", "Dependency", True, none, none),
+            QueuedJob("7005", "cpu", "Priority", False, none, none),
+        ]
+        summary = tick(self.dispatch, slurm, now=NOW)
+        self.assertEqual(summary["backends"][0]["yielding_to"], [])
+        self.assertFalse(any("--hold" in command for command in slurm.submitted))
+
+    def test_a_hold_placed_by_hand_is_not_released(self):
+        self.yielding_gpu(max_jobs=1)
+        slurm = FakeSlurm()
+        tick(self.dispatch, slurm, now=NOW)
+        (key,) = slurm.jobs
+        slurm.jobs[key].reason = "JobHeldUser"
+        summary = tick(self.dispatch, slurm, now=NOW + timedelta(minutes=10))
+        self.assertEqual(self.holds(summary, "release"), [])
+        self.assertEqual(slurm.jobs[key].reason, "JobHeldUser")
 
     def test_twins_of_claimed_and_done_units_are_cancelled(self):
         self.configure([backend("gpu", "gpu", max_jobs=10)])

@@ -50,6 +50,12 @@ sbatch --job-name=tick_<campaign> --output=DISPATCH_DIR/slurm/%x-%j.out \
 touch DISPATCH_DIR/STOP_TICKER                       # stops the ticker early
 ```
 
+CS relaxations give way to your other GPU jobs: while one of them waits for
+an H100 or A100 80GB (or names no GPU type), each tick holds the campaign's
+queued relaxations, and releases them once none is waiting. Running
+relaxations keep their GPUs, and the relaxations' priority against other
+users is unchanged.
+
 Conda environments (files in `conda_envs/`):
 
 - `snb`: the controller, QE runners (QE itself comes from the cluster), ShakeNBreak, analysis.

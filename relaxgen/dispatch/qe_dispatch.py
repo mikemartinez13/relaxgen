@@ -22,6 +22,10 @@ the claim, and the GPU job resumes from the last stored step.  Only the SCF in
 progress on the CPU is lost: the GPU's first SCF starts from scratch after any
 hand-off anyway, and finishes no later than the CPU would have.
 
+A backend with a ``yield_to`` rule gives way to this user's other jobs: while
+one of them waits for the GPUs the rule names, ``tick`` holds the campaign's
+queued jobs on that backend and releases them once none is waiting.
+
 A manifest task with ``"withdrawn": true`` is no longer wanted: ``tick``
 cancels all of its jobs, queued or running, and never submits it again.
 
@@ -64,6 +68,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from relaxgen.dispatch import clusters  # noqa: E402
 ACTIVE_STATES = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "REQUEUED", "RESIZING", "SUSPENDED"}
+# Pending reasons of a job that is waiting only for nodes, not on a hold or dependency.
+WAITING_FOR_NODES = {"None", "Priority", "Resources"}
 HISTORY_WINDOW = "now-3days"
 CLAIM_REFRESH_SECONDS = 60
 PREEMPT_POLL_SECONDS = 10
@@ -109,6 +115,19 @@ class JobInfo:
     submit: datetime | None
     start: datetime | None
     partition: str = ""
+    reason: str = ""
+
+
+@dataclass
+class QueuedJob:
+    """A pending job of this user, from any campaign or project."""
+
+    key: str
+    name: str
+    reason: str
+    gpu: bool
+    gpu_types: frozenset[str]
+    features: frozenset[str]
 
 
 class SlurmCLI:
@@ -123,15 +142,34 @@ class SlurmCLI:
         """Array elements of this user's jobs named ``name`` that are still queued or running."""
 
         output = self._run(
-            ["squeue", "-r", "-h", "-u", self.user, "-n", name, "-o", "%i|%T|%V|%S|%P"]
+            ["squeue", "-r", "-h", "-u", self.user, "-n", name, "-o", "%i|%T|%V|%S|%P|%r"]
         )
         jobs = {}
         for line in output.splitlines():
-            key, state, submit, start, partition = line.split("|")
+            key, state, submit, start, partition, reason = line.split("|")
             jobs[key] = JobInfo(
                 key, state, parse_slurm_time(submit),
-                parse_slurm_time(start) if state != "PENDING" else None, partition,
+                parse_slurm_time(start) if state != "PENDING" else None, partition, reason,
             )
+        return jobs
+
+    def pending_jobs(self, partitions: Sequence[str]) -> list[QueuedJob]:
+        """Array elements of all of this user's pending jobs in ``partitions``."""
+
+        output = self._run(
+            ["squeue", "-r", "-h", "-u", self.user, "-t", "PENDING", "-p", ",".join(partitions),
+             "-O", "JobArrayID:|,Name:|,Reason:|,tres-per-node:|,tres-per-job:|,tres-per-task:|,Feature:|"]
+        )
+        jobs = []
+        for line in output.splitlines():
+            # Feature comes last: a constraint such as "a|b" contains the separator.
+            key, name, reason, *tres, features = line.removesuffix("|").split("|", 6)
+            requests = ",".join(tres)
+            jobs.append(QueuedJob(
+                key, name, reason, "gpu" in requests,
+                frozenset(re.findall(r"gpu:([A-Za-z][\w-]*):\d", requests)),
+                frozenset(re.findall(r"\w+", features)) - {"null"},
+            ))
         return jobs
 
     def finished_jobs(self, keys: Sequence[str]) -> dict[str, JobInfo]:
@@ -181,6 +219,14 @@ class SlurmCLI:
     def cancel(self, keys: Sequence[str]) -> None:
         if keys:
             subprocess.run(["scancel", *keys], check=False)
+
+    def hold(self, keys: Sequence[str]) -> None:
+        if keys:
+            subprocess.run(["scontrol", "uhold", *keys], check=False)
+
+    def release(self, keys: Sequence[str]) -> None:
+        if keys:
+            subprocess.run(["scontrol", "release", *keys], check=False)
 
 
 # --------------------------------------------------------------------------
@@ -363,6 +409,21 @@ def relax_backend_gate(
         until = datetime.fromtimestamp(last + config["zero_progress_window_seconds"])
         return False, f"backed off: {len(stalls)} zero-progress segments; retry after {until:%Y-%m-%d %H:%M}"
     return True, f"ok: {step / 60:.0f} min steps ({source})"
+
+
+def competes_for_gpus(job: QueuedJob, rule: dict[str, Any]) -> bool:
+    """Whether ``job`` waits for GPUs that a backend's ``yield_to`` rule describes.
+
+    A job with no constraint or GPU type could land on those GPUs; one that
+    names only other features or GPU types cannot.
+    """
+
+    return (
+        job.gpu
+        and job.reason in WAITING_FOR_NODES
+        and (not job.features or bool(job.features & set(rule["features"])))
+        and (not job.gpu_types or bool(job.gpu_types & set(rule["gres_types"])))
+    )
 
 
 def estimate_backend(
@@ -605,7 +666,39 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
                 cpu_cores_used += backend["cores"]
                 break
 
-    # 6. Submit.
+    # 6. A backend with a ``yield_to`` rule steps aside for this user's other
+    #    jobs waiting for its GPUs: while any is queued, this campaign's queued
+    #    jobs on it are held (new ones are submitted held), and they are released
+    #    once none is left.  Only holds placed here are released.
+    def held(sub: dict[str, Any]) -> bool:
+        info = active.get(sub["job_key"])
+        return info is not None and info.reason.startswith("JobHeld")
+
+    yielding: set[str] = set()
+    for backend in backends:
+        rule = backend.get("yield_to")
+        if not rule:
+            continue
+        others = [
+            job.key for job in slurm.pending_jobs(rule["partitions"])
+            if job.name != config["job_name"] and competes_for_gpus(job, rule)
+        ]
+        backend["yielding_to"] = others
+        queued = [sub for sub in all_subs if sub["backend"] == backend["name"] and sub.get("state") == "PENDING"]
+        if others:
+            yielding.add(backend["name"])
+            change, action = [sub for sub in queued if not held(sub)], "hold"
+        else:
+            change, action = [sub for sub in queued if sub.get("held_by_dispatch") and held(sub)], "release"
+        if change:
+            keys = [sub["job_key"] for sub in change]
+            decisions.append({"action": action, "backend": backend["name"], "jobs": keys, "yielding_to": others})
+            if not dry_run:
+                (slurm.hold if action == "hold" else slurm.release)(keys)
+                for sub in change:
+                    sub["held_by_dispatch"] = action == "hold"
+
+    # 7. Submit.
     for index, backend in plan:
         command = [
             "sbatch", "--parsable", f"--array={index}", f"--job-name={config['job_name']}",
@@ -616,6 +709,7 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
                 + [f"{key}={value}" for key, value in backend.get("env", {}).items()]
             ),
             *backend["sbatch_args"],
+            *(["--hold"] if backend["name"] in yielding else []),
             str(PROJECT_ROOT / backend["launcher"]),
             config["manifest"],
         ]
@@ -624,7 +718,8 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
             job_id = slurm.submit(command)
             units[str(index)]["submissions"].append(
                 {"backend": backend["name"], "job_key": f"{job_id}_{index}",
-                 "submitted_at": now.isoformat(), "state": "PENDING"}
+                 "submitted_at": now.isoformat(), "state": "PENDING",
+                 "held_by_dispatch": backend["name"] in yielding}
             )
             decision["job_key"] = f"{job_id}_{index}"
         decisions.append(decision)
@@ -642,7 +737,7 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
         "backends": [
             {key: b.get(key) for key in ("name", "enabled", "reason", "active", "runtime_seconds",
                                          "runtime_samples", "wait_seconds", "wait_samples",
-                                         "step_seconds", "step_source")}
+                                         "step_seconds", "step_source", "yielding_to")}
             for b in backends
         ],
         "decisions": decisions,
@@ -832,6 +927,8 @@ def status(dispatch_dir: Path) -> None:
         print(f"  {backend['name']:20s} {'on ' if backend['enabled'] else 'off'} "
               f"active={backend['active']:3d} wait={hours(backend['wait_seconds'])} "
               f"run={hours(backend['runtime_seconds'])}  ({backend['reason']})")
+        if backend.get("yielding_to"):
+            print(f"  {'':20s} queued jobs held behind {len(backend['yielding_to'])} of your other GPU job(s)")
     submitted = [d for d in last["decisions"] if d["action"] == "submit"]
     print(f"  last tick submitted {len(submitted)} job(s)")
 

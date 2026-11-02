@@ -49,6 +49,9 @@ class ProfileTest(unittest.TestCase):
         launcher = (PROJECT_ROOT / backend["launcher"]).read_text()
         self.assertIn('#SBATCH --constraint="h100_94gb|a100_80gb"', launcher)
         self.assertLessEqual(backend["segment_seconds"], 4 * 24 * 3600)   # gpu partition limit
+        # Queued relaxations give way to the user's other jobs by holding, not by --nice.
+        self.assertEqual(backend["yield_to"]["features"], clusters.CS_GPU_FEATURES)
+        self.assertFalse(any(arg.startswith("--nice") for arg in backend["sbatch_args"]))
 
     def test_cs_has_no_scf_backends(self):
         with self.assertRaises(SystemExit):

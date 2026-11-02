@@ -167,6 +167,8 @@ def relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
 # build from the GPU it gets (H100 -> qe-7.5-h100, A100 -> qe-7.5-a100).  The
 # A100 40GB nodes are PCIe cards, 1.6x slower than the 80GB ones (2026-10-29).
 CS_GPU_FEATURES = ["h100_94gb", "a100_80gb"]
+# Their gres types (sinfo %G), for --gres=gpu:<type> requests.
+CS_GPU_GRES_TYPES = ["nvidia_h100_nvl", "a100"]
 
 
 def cs_relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
@@ -192,6 +194,11 @@ def cs_relax_backends(manifest_dir: Path) -> list[dict[str, Any]]:
             # Median wait of the six timing-test GPU jobs, 2026-10-28.
             "wait_prior_seconds": 2 * 3600,
             "check": None,
+            # Queued relaxations are held while any of the user's other jobs waits
+            # for these GPUs, so they start only after it (2026-11-02).  Holding,
+            # unlike --nice, leaves their priority against other users unchanged.
+            "yield_to": {"partitions": ["gpu"], "features": CS_GPU_FEATURES,
+                         "gres_types": CS_GPU_GRES_TYPES},
         },
     ]
 
