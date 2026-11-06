@@ -18,8 +18,8 @@
 #SBATCH --job-name=bi2te3_pristine_qe
 #SBATCH --mail-user=gqs7zr@virginia.edu
 #SBATCH --mail-type=END,FAIL
-#SBATCH --output=/scratch/gqs7zr/ai4mat/runs/%x-%j.out
-#SBATCH --error=/scratch/gqs7zr/ai4mat/runs/%x-%j.err
+#SBATCH --output=/scratch/gqs7zr/relaxgen/logs/%x-%j.out
+#SBATCH --error=/scratch/gqs7zr/relaxgen/logs/%x-%j.err
 
 set -euo pipefail
 

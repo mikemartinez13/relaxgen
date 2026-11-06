@@ -39,7 +39,7 @@ Layout under ``--dispatch-dir``::
     preempt/      hand-over requests from a GPU job to the CPU job holding a unit
     events/       one file per worker outcome
     log.jsonl     one line per tick with its decisions
-    slurm/        job stdout and stderr
+    slurm/        job stdout and stderr, unless config.json sets log_dir
 """
 
 from __future__ import annotations
@@ -493,6 +493,9 @@ class TickLock:
 
 def tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool = False, now: datetime | None = None) -> dict[str, Any]:
     dispatch_dir = dispatch_dir.expanduser().resolve()
+    # The off switch: every tick, including a worker's piggyback tick, stops here.
+    if (dispatch_dir / "STOP").exists():
+        return {"skipped": "STOP file present"}
     with TickLock(dispatch_dir / "tick.lock") as lock:
         if not lock.held:
             return {"skipped": "another tick holds the lock"}
@@ -702,11 +705,12 @@ def _tick(dispatch_dir: Path, slurm: SlurmCLI, *, dry_run: bool, now: datetime) 
                     sub["held_by_dispatch"] = action == "hold"
 
     # 7. Submit.
+    log_dir = Path(config.get("log_dir", dispatch_dir / "slurm"))
     for index, backend in plan:
         command = [
             "sbatch", "--parsable", f"--array={index}", f"--job-name={config['job_name']}",
-            f"--output={dispatch_dir / 'slurm'}/%x-%A_%a.out",
-            f"--error={dispatch_dir / 'slurm'}/%x-%A_%a.err",
+            f"--output={log_dir}/%x-%A_%a.out",
+            f"--error={log_dir}/%x-%A_%a.err",
             "--export=" + ",".join(
                 ["ALL", f"DISPATCH_DIR={dispatch_dir}", f"DISPATCH_BACKEND={backend['name']}", "OVERWRITE=1"]
                 + [f"{key}={value}" for key, value in backend.get("env", {}).items()]

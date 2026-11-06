@@ -135,6 +135,25 @@ class DispatchTest(unittest.TestCase):
         cpu = next(b for b in summary["backends"] if b["name"] == "cpu")
         self.assertFalse(cpu["enabled"])
 
+    def test_stop_file_blocks_ticks_until_removed(self):
+        self.configure([backend("gpu", "gpu", max_jobs=3)])
+        slurm = FakeSlurm()
+        (self.dispatch / "STOP").touch()
+        self.assertEqual(tick(self.dispatch, slurm, now=NOW), {"skipped": "STOP file present"})
+        self.assertEqual(slurm.submitted, [])
+        (self.dispatch / "STOP").unlink()
+        self.assertEqual(len(self.submitted_backends(tick(self.dispatch, slurm, now=NOW))), 3)
+
+    def test_job_logs_go_to_log_dir_when_config_sets_it(self):
+        self.configure([backend("gpu", "gpu", max_jobs=1)])
+        config = json.loads((self.dispatch / "config.json").read_text())
+        log_dir = Path(self.tmp.name) / "logs"
+        write_json_atomic(self.dispatch / "config.json", {**config, "log_dir": str(log_dir)})
+        slurm = FakeSlurm()
+        tick(self.dispatch, slurm, now=NOW)
+        self.assertIn(f"--output={log_dir}/%x-%A_%a.out", slurm.submitted[-1])
+        self.assertIn(f"--error={log_dir}/%x-%A_%a.err", slurm.submitted[-1])
+
     def test_cpu_takes_tail_when_gpu_queue_is_slow(self):
         # GPU: 2 slots, 1 h runs, 10 h wait.  CPU: 2 h total, two 168-core jobs fit the budget.
         self.configure(
@@ -509,6 +528,17 @@ class DispatchTest(unittest.TestCase):
         self.assertFalse((self.dispatch / "claims" / "2.json").exists())
         events = [json.loads(p.read_text()) for p in (self.dispatch / "events").glob("2__*.json")]
         self.assertEqual(events[0]["outcome"], "ran")
+
+    def test_stop_file_blocks_the_tick_of_an_exiting_worker(self):
+        self.configure([backend("gpu", "gpu", max_jobs=3)])
+        args = argparse.Namespace(dispatch_dir=self.dispatch, task_index=2, backend="gpu", child=["true"])
+        slurm = FakeSlurm()
+        (self.dispatch / "STOP").touch()
+        self.assertEqual(worker(args, slurm=slurm), 0)
+        self.assertEqual(slurm.submitted, [])
+        (self.dispatch / "STOP").unlink()
+        self.assertEqual(worker(args, slurm=slurm), 0)
+        self.assertGreater(len(slurm.submitted), 0)
 
     def test_worker_that_loses_the_claim_does_not_run(self):
         self.configure([backend("gpu", "gpu", max_jobs=0)])

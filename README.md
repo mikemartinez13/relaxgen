@@ -37,6 +37,16 @@ python -m relaxgen.dispatch.qe_dispatch tick --dispatch-dir DISPATCH_DIR
 sbatch --array=0 slurm/run_dft_relax_cpu_slurm_uva.sh RELAX_MANIFEST.json
 ```
 
+To stop a campaign, create `STOP` first and then cancel its jobs. Every worker
+that exits also runs a tick, so jobs cancelled without `STOP` can be resubmitted.
+`STOP` blocks new submissions but does not cancel anything:
+
+```bash
+touch DISPATCH_DIR/STOP
+scancel -u "$USER" -n qd_<campaign>
+rm DISPATCH_DIR/STOP                                 # to resume, then run one tick
+```
+
 `qe_dispatch init` takes its backends from `relaxgen/dispatch/clusters.py` for
 the cluster it runs on (Slurm `ClusterName`; `--cluster rivanna|cs` overrides
 it). Rivanna runs ticks from `scrontab`. The CS cluster has no `scrontab` and

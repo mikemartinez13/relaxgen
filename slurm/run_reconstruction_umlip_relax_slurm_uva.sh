@@ -11,8 +11,8 @@
 #SBATCH --job-name=bi2te3_eqv3_tight
 #SBATCH --mail-user=gqs7zr@virginia.edu
 #SBATCH --mail-type=END,FAIL
-#SBATCH --output=/scratch/gqs7zr/ai4mat/runs/%x-%A_%a.out
-#SBATCH --error=/scratch/gqs7zr/ai4mat/runs/%x-%A_%a.err
+#SBATCH --output=/scratch/gqs7zr/relaxgen/logs/%x-%A_%a.out
+#SBATCH --error=/scratch/gqs7zr/relaxgen/logs/%x-%A_%a.err
 
 set -euo pipefail
 [[ -n "${SLURM_JOB_ID:-}" ]] || { echo "Submit this script with sbatch." >&2; exit 1; }
@@ -29,7 +29,7 @@ CONFIG_YML=${4:-${CKPT_DIR}/eqv3/config.yml}
 [[ -f "${CHECKPOINT}" ]] || { echo "EqV3 checkpoint not found: ${CHECKPOINT}" >&2; exit 2; }
 [[ -f "${CONFIG_YML}" ]] || { echo "EqV3 config not found: ${CONFIG_YML}" >&2; exit 2; }
 
-mkdir -p "${OUTPUT_DIR}" /scratch/gqs7zr/ai4mat/runs
+mkdir -p "${OUTPUT_DIR}" /scratch/gqs7zr/relaxgen/logs
 cd "${PROJECT_ROOT}"
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
